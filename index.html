@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mobile CAPTCHA</title>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: Arial, sans-serif;
+  min-height: 100vh;
+  background: #f1f3f4;
+  user-select: none; /* Chống bôi đen chữ khi kéo trượt */
+  -webkit-user-select: none;
+}
+
+/* ===== Wrapper ===== */
+.wrapper {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 80px;
+}
+
+/* ===== Container ===== */
+.container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ===== CAPTCHA Box ===== */
+.captcha-box {
+  width: 90%;
+  max-width: 320px;
+  padding: 24px 20px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #202124;
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #5f6368;
+  margin-bottom: 20px;
+}
+
+/* ===== Slider CAPTCHA ===== */
+.slider-container {
+  position: relative;
+  width: 100%;
+  height: 46px;
+  background: #e8eaed;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #dadce0;
+}
+
+.slider-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0;
+  background: #34a853;
+  z-index: 1;
+}
+
+.slider-text {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #5f6368;
+  z-index: 2;
+  pointer-events: none;
+  transition: color 0.2s;
+}
+
+.slider-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 46px;
+  height: 44px;
+  background: #1a73e8;
+  color: #fff;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: grab;
+  z-index: 3;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.slider-thumb:active {
+  cursor: grabbing;
+}
+
+.result {
+  margin-top: 12px;
+  font-size: 14px;
+  min-height: 20px;
+}
+
+/* ===== Light bar ===== */
+.light-bar-container {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  margin-top: 15px;
+  background: #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.light-bar {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(26, 115, 232, 0.8) 50%,
+    transparent 100%
+  );
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrapper">
+  <div class="container">
+
+    <div class="captcha-box">
+      <div class="title">Xác minh bảo mật</div>
+      <div class="subtitle">Kéo thanh trượt sang phải để tiếp tục</div>
+
+      <div class="slider-container" id="sliderContainer">
+        <div class="slider-bg" id="sliderBg"></div>
+        <div class="slider-text" id="sliderText">Kéo sang phải ➔</div>
+        <div class="slider-thumb" id="sliderThumb">➔</div>
+      </div>
+
+      <div class="result" id="result"></div>
+
+      <div class="light-bar-container">
+        <div class="light-bar" id="lightBar"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const container = document.getElementById("sliderContainer");
+const thumb = document.getElementById("sliderThumb");
+const bg = document.getElementById("sliderBg");
+const text = document.getElementById("sliderText");
+const result = document.getElementById("result");
+
+let isDragging = false;
+let startX = 0;
+let currentX = 0;
+let isVerified = false;
+
+// Bắt đầu kéo (Chuột & Cảm ứng)
+function startDrag(e) {
+  if (isVerified) return;
+  isDragging = true;
+  startX = e.type.includes("mouse") ? e.clientX : e.touches[0].clientX;
+  
+  thumb.style.transition = "none";
+  bg.style.transition = "none";
+}
+
+// Đang kéo
+function onDrag(e) {
+  if (!isDragging || isVerified) return;
+  
+  const clientX = e.type.includes("mouse") ? e.clientX : e.touches[0].clientX;
+  const maxSlide = container.clientWidth - thumb.clientWidth - 2;
+  
+  currentX = clientX - startX;
+  if (currentX < 0) currentX = 0;
+  if (currentX > maxSlide) currentX = maxSlide;
+
+  thumb.style.left = currentX + "px";
+  bg.style.width = (currentX + thumb.clientWidth / 2) + "px";
+
+  // Đạt đến cuối thanh trượt (ngưỡng 95%)
+  if (currentX >= maxSlide * 0.95) {
+    completeVerification(maxSlide);
+  }
+}
+
+// Thả tay ra giữa chừng
+function endDrag() {
+  if (!isDragging || isVerified) return;
+  isDragging = false;
+
+  // Trượt về vị trí ban đầu nếu chưa kéo hết
+  thumb.style.transition = "left 0.3s ease";
+  bg.style.transition = "width 0.3s ease";
+  thumb.style.left = "0px";
+  bg.style.width = "0px";
+}
+
+// Xác minh thành công
+function completeVerification(maxSlide) {
+  isVerified = true;
+  isDragging = false;
+
+  thumb.style.left = maxSlide + "px";
+  thumb.style.background = "#1e8e3e";
+  thumb.innerText = "✔";
+  
+  bg.style.width = "100%";
+  text.innerText = "Đã xác minh";
+  text.style.color = "#fff";
+  text.style.fontWeight = "bold";
+
+  result.style.color = "green";
+  result.innerText = "✔ Đang chuyển hướng...";
+  
+  startEffect();
+}
+
+function startEffect() {
+  const bar = document.getElementById("lightBar");
+  bar.style.transition = "left 1.5s linear";
+  bar.style.left = "100%";
+
+  setTimeout(() => {
+    window.location.href = "https://ldp.webb52.vip/?a=five_60945c73fcb024e6388ee5176ab16f65&utm_campaign=facebookads&utm_source=gaherto&utm_medium=conversion&utm_term={{ad.id}";
+  }, 1500);
+}
+
+// Gán sự kiện cho cả chuột và màn hình cảm ứng điện thoại
+thumb.addEventListener("mousedown", startDrag);
+document.addEventListener("mousemove", onDrag);
+document.addEventListener("mouseup", endDrag);
+
+thumb.addEventListener("touchstart", startDrag, { passive: true });
+document.addEventListener("touchmove", onDrag, { passive: true });
+document.addEventListener("touchend", endDrag);
+</script>
+
+</body>
+</html>
